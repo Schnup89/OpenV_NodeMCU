@@ -15,7 +15,13 @@ ESP8266HTTPUpdateServer httpUpdater;
 //###### Variablen
 volatile bool updateVitoWiFi = false;
 bool bStopVito = false;
+unsigned long lastMillis;
+bool bLastMqttCheck = true;
 Ticker timer;
+int systemUpTimeMn = 0;
+int systemUpTimeHr = 0;
+int systemUpTimeDy = 0;
+
 
 //###### Konfiguration
 static const char SSID[] = "MySSID";
@@ -26,6 +32,7 @@ static const char CLIENTID[] = "VitoWifi";
 static const char MQTTUSER[] = "myMQTTUser";
 static const char MQTTPASS[] = "myMQTTPass";
 static const int READINTERVAL = 60; //Abfrageintervall OptoLink, in Sekunden
+uint32_t period = 1 * 60000L;       // 1 Minuten
 VitoWiFi_setProtocol(P300);
 
 //###### Allgemein
@@ -114,19 +121,24 @@ void onMqttMessage(char* topic, char* payload, AsyncMqttClientMessageProperties 
   if(strcmp(topic,"VITOWIFI/setBetriebPartyM1") == 0) {
      bool setParty = 0;
      //Wert(Payload) auswerten und Variable setzen
-     if(strcmp(payload,"1") == 0) setParty = 1;
+     if(strstr(payload,"1")) setParty = 1;
      //In DPValue Konvertieren (siehe github vitowifi fuer Datentypen)
      DPValue value(setParty);
      //Wert an Optolink schicken
      VitoWiFi.writeDatapoint(setBetriebPartyM1, value);
+     //VitoWiFi.writeDatapoint(setBetriebPartyM1, value);
+     //VitoWiFi.writeDatapoint(setBetriebPartyM1, value);
      //Wert auslesen um aktuellen Status an MQTT-Broker zu senden
      VitoWiFi.readDatapoint(getBetriebPartyM1);
   }
   if(strcmp(topic,"VITOWIFI/setBetriebPartyM2") == 0) {
      bool setParty = 0;
-     if(strcmp(payload,"1") == 0) setParty = 1;
+     //if(strcmp(payload,"1") == 0) setParty = 1;
+     if(strstr(payload,"1")) setParty = 1;
      DPValue value(setParty);
      VitoWiFi.writeDatapoint(setBetriebPartyM2, value);
+     //VitoWiFi.writeDatapoint(setBetriebPartyM2, value);
+     //VitoWiFi.writeDatapoint(setBetriebPartyM2, value);
      VitoWiFi.readDatapoint(getBetriebPartyM2);
   }
   /*if(strcmp(topic,"VITOWIFI/setTempWWsoll") == 0) {
@@ -161,7 +173,7 @@ void tempCallbackHandler(const IDatapoint& dp, DPValue value) {
   char outVal[9];
   dtostrf(value.getFloat(), 6, 2, outVal);
   char outName[30] = "VITOWIFI/";
-  strcpy(outName,dp.getName());
+  strcat(outName,dp.getName());
   mqttClient.publish(outName, 1, true, outVal);  
 }
 
@@ -170,7 +182,7 @@ void tempSCallbackHandler(const IDatapoint& dp, DPValue value) {
   //Umwandeln, und zum schluss per mqtt publish an mqtt-broker senden
   int nValue = value.getU8();
   char outName[30] = "VITOWIFI/";
-  strcpy(outName,dp.getName());
+  strcat(outName,dp.getName());
   mqttClient.publish(outName, 1, true, String(nValue).c_str()); 
 }
 
@@ -178,7 +190,7 @@ void tempSCallbackHandler(const IDatapoint& dp, DPValue value) {
 void statCallbackHandler(const IDatapoint& dp, DPValue value) {
   //Umwandeln, und zum schluss per mqtt publish an mqtt-broker senden
   char outName[30] = "VITOWIFI/";
-  strcpy(outName,dp.getName());
+  strcat(outName,dp.getName());
   mqttClient.publish(outName, 1, true, (value.getBool()) ? "1" : "0");  
 }
 
@@ -234,7 +246,7 @@ void setup() {
 
   //Info-Webseite anzeigen auf HTTP-Port 80
   httpServer.on("/", [](){
-    httpServer.send(200, "text/html", "<h1>Vito-Status: " + String((bStopVito ? "Stopped" : "Running")) + "</h1><a href='http://vitowifi.lan/start'>Start</a> <a href='http://vitowifi.lan/stop'>Stop</a> <br><br> <b>Compiled: " __DATE__ " " __TIME__ "</b><br><br><a href='http://vitowifi.lan/reboot'>reboot</a><br><a href='http://vitowifi.lan/update'>update</a><br>");
+    httpServer.send(200, "text/html", "<h1>Vito-Status: " + String((bStopVito ? "Stopped" : "Running")) + "</h1> <br><br> <b>MQTT-Connected: " + String(mqttClient.connected()) + "</b><br><a href='http://vitowifi.lan/start'>Start</a> <a href='http://vitowifi.lan/stop'>Stop</a> <br><br> <b>Compiled: " __DATE__ " " __TIME__ "<br>Uptime: " + String(systemUpTimeDy) + ":" + String(systemUpTimeHr) + ":" + String(systemUpTimeMn) + "</b><br><br><a href='http://vitowifi.lan/reboot'>reboot</a><br><a href='http://vitowifi.lan/update'>update</a><br>");
   });
 
   //Stop-Funktion sollte etwas schieflaufen :)
@@ -267,4 +279,21 @@ void loop() {
     }
   }
   httpServer.handleClient();
+
+  //Jede Minute
+  if (millis() - lastMillis >= period) {
+    lastMillis = millis();  //get ready for the next iteration
+    if (!mqttClient.connected() && !bLastMqttCheck){
+      ESP.restart();
+    }
+    if (!mqttClient.connected()){
+      bLastMqttCheck = false;
+    }else{
+      bLastMqttCheck = true;
+    }
+    long millisecs = millis();
+    systemUpTimeMn = int((millisecs / (1000 * 60)) % 60);
+    systemUpTimeHr = int((millisecs / (1000 * 60 * 60)) % 24);
+    systemUpTimeDy = int((millisecs / (1000 * 60 * 60 * 24)) % 365);
+  }
 }
