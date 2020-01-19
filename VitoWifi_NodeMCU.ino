@@ -246,7 +246,7 @@ void setup() {
 
   //Info-Webseite anzeigen auf HTTP-Port 80
   httpServer.on("/", [](){
-    httpServer.send(200, "text/html", "<h1>Vito-Status: " + String((bStopVito ? "Stopped" : "Running")) + "</h1> <br><br> <b>MQTT-Connected: " + String(mqttClient.connected()) + "</b><br><a href='http://vitowifi.lan/start'>Start</a> <a href='http://vitowifi.lan/stop'>Stop</a> <br><br> <b>Compiled: " __DATE__ " " __TIME__ "<br>Uptime: " + String(systemUpTimeDy) + ":" + String(systemUpTimeHr) + ":" + String(systemUpTimeMn) + "</b><br><br><a href='http://vitowifi.lan/reboot'>reboot</a><br><a href='http://vitowifi.lan/update'>update</a><br>");
+    httpServer.send(200, "text/html", "<h1>Vito-Status: " + String((bStopVito ? "Stopped" : "Running")) + "</h1> <br><br> <b>MQTT-Connected: " + String(mqttClient.connected()) + "</b><br><a href='/start'>Start</a> <a href='/stop'>Stop</a> <br><br> <b>Compiled: " __DATE__ " " __TIME__ "<br>Uptime: " + String(systemUpTimeDy) + ":" + String(systemUpTimeHr) + ":" + String(systemUpTimeMn) + "</b><br><br><a href='/reboot'>reboot</a><br><a href='/update'>update</a><br>");
   });
 
   //Stop-Funktion sollte etwas schieflaufen :)
